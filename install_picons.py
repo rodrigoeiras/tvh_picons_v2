@@ -1,7 +1,7 @@
 #!/bin/python2
 # -*- coding: utf-8 -*-
 
-__version__ = "0.3.9"
+__version__ = "0.4.0"
 
 
 import argparse
@@ -28,7 +28,7 @@ DEBUG_MODE = False
 
 CONFIG = {
     'updateurl': "https://raw.githubusercontent.com/rodrigoeiras/kodi_picons_v2/master/install_picons.py",
-    'urlPicons': "https://raw.githubusercontent.com/rodrigoeiras/kodi_picons_v2/master/img",
+    'urlPicons': "https://hk319yfwbl.execute-api.sa-east-1.amazonaws.com/prod",
     'e2dir': '/etc/enigma2/',
     'lambedbFile': '/etc/enigma2/lamedb',
     'localPiconDirectory': '/usr/share/enigma2/picon/',
