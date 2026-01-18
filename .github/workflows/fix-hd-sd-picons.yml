@@ -1,0 +1,107 @@
+name: Fix HD/SD picons
+
+on:
+  workflow_dispatch:
+    inputs:
+      picons_dir:
+        description: "Diretório dos PNGs dentro do repo"
+        required: true
+        default: "img"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fix missing HD/SD pairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          PDIR="${{ github.event.inputs.picons_dir }}"
+          echo "Picons dir: $PDIR"
+          test -d "$PDIR" || (echo "Diretório não encontrado: $PDIR" && exit 1)
+
+          python3 - << 'PY'
+          import os
+          import shutil
+          import sys
+
+          pdir = os.environ.get("PDIR")
+          if not pdir:
+            print("PDIR not set", file=sys.stderr)
+            sys.exit(1)
+
+          def is_png(fn: str) -> bool:
+            return fn.lower().endswith(".png")
+
+          def is_hd(fn: str) -> bool:
+            f = fn.lower()
+            return f.endswith("hd.png") and f != "hd.png"
+
+          created = 0
+          scanned = 0
+
+          # Index all pngs by relative path (case-sensitive filenames on linux)
+          all_files = []
+          for root, _, files in os.walk(pdir):
+            for f in files:
+              if is_png(f):
+                all_files.append(os.path.join(root, f))
+
+          # Build quick lookup set
+          existing = set(all_files)
+
+          def rel(path: str) -> str:
+            return os.path.relpath(path, pdir)
+
+          # Pass 1: for each *hd.png ensure non-hd exists
+          for hd_path in list(existing):
+            scanned += 1
+            fn = os.path.basename(hd_path)
+            if not is_hd(fn):
+              continue
+            non_hd_path = os.path.join(os.path.dirname(hd_path), fn[:-6] + ".png")  # remove 'hd.png'
+            if non_hd_path not in existing and os.path.exists(hd_path):
+              shutil.copy2(hd_path, non_hd_path)
+              existing.add(non_hd_path)
+              created += 1
+              print(f"[CREATE SD] {rel(non_hd_path)}  <-  {rel(hd_path)}")
+
+          # Pass 2: for each non-hd ensure *hd.png exists
+          for path in list(existing):
+            fn = os.path.basename(path)
+            if not is_png(fn):
+              continue
+            if is_hd(fn):
+              continue
+            hd_path = os.path.join(os.path.dirname(path), fn[:-4] + "hd.png")
+            if hd_path not in existing and os.path.exists(path):
+              shutil.copy2(path, hd_path)
+              existing.add(hd_path)
+              created += 1
+              print(f"[CREATE HD] {rel(hd_path)}  <-  {rel(path)}")
+
+          print(f"\nScanned: {scanned}")
+          print(f"Created: {created}")
+          PY
+        env:
+          PDIR: ${{ github.event.inputs.picons_dir }}
+
+      - name: Commit changes (if any)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git status --porcelain | grep -q .; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Fix missing HD/SD picon pairs"
+            git push
+          else
+            echo "Nada para commitar."
+          fi
